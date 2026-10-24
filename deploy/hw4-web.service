@@ -1,0 +1,26 @@
+[Unit]
+Description=HW4 GCS file web server
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=hw4-web
+Group=hw4-web
+WorkingDirectory=/opt/hw4-web-server
+EnvironmentFile=/etc/hw4-web.env
+ExecStart=/opt/hw4-web-server/.venv/bin/gunicorn --bind 0.0.0.0:8080 --workers 1 --worker-class gthread --threads 8 --timeout 60 --access-logfile - --error-logfile - --capture-output server:app
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hw4-web
+
+[Install]
+WantedBy=multi-user.target

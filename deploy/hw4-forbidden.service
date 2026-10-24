@@ -1,0 +1,27 @@
+[Unit]
+Description=HW4 forbidden country Pub/Sub subscriber
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=hw4-forbidden
+Group=hw4-forbidden
+WorkingDirectory=/opt/hw4-forbidden
+EnvironmentFile=/etc/hw4-forbidden.env
+ExecStart=/opt/hw4-forbidden/.venv/bin/python -u subscriber.py
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=90
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hw4-forbidden
+
+[Install]
+WantedBy=multi-user.target
