@@ -143,8 +143,6 @@ curl -i \
   "http://$HW5_IP:8080/10.html"
 ```
 
-An existing file requested from an allowed country returns `200`, a banned country such as Cuba returns `400` and publishes a notification, and a missing file requested from an allowed country returns `404`.
-
 For the full experiment, open two terminals, set `HW5_IP` in each, and run this command in both with the same seed:
 
 ```bash
@@ -152,12 +150,6 @@ For the full experiment, open two terminals, set `HW5_IP` in each, and run this 
   -d "$HW5_IP" -p 8080 -b none -w none \
   -n 50000 -i 11999 -r 42 -t 120
 ```
-
-The supplied `http-client` binary is for macOS ARM64; use `http-client_linux` for Linux x86-64 or `http-client.exe` for Windows, and adjust `-i` if the verified file range differs from `0` through `11999`.
-
-Start both clients close together and let each finish naturally, saving separate logs, exit codes, start/end times, and database counts before and after the run; use the supplied client directly because the retained `stress/run_clients.py` does not implement the required identical-seed, 50,000-request runs.
-
-Monitor VM load, database connections, and Pub/Sub backlog during the experiment, leaving the subscriber code unchanged.
 
 ### Database schema
 
@@ -190,8 +182,6 @@ The `failed_requests` table stores an additional row for each non-200 request:
 | `error_code` | `INTEGER` | Non-200 HTTP status code. |
 
 Both inserts run in one transaction, so a successful request normally adds one main row and an unsuccessful request adds one main row plus one error row.
-
-If persistence fails, the server explicitly logs the attempted record and returns `503`; a failure during commit can leave the commit outcome uncertain, so inserts are not blindly retried.
 
 The schema service runs `setup_schema.py` automatically; for manual setup with ADC and the database environment variables already configured, run:
 
@@ -253,5 +243,3 @@ After exporting reports and logs, clean up the deployment:
 Cleanup removes the VM and related HW5 resources, releases the reserved static IP, and stops Cloud SQL with `activationPolicy=NEVER`, while preserving the SQL instance, its data, and the reused HW2 bucket.
 
 If a temporary `hw5-iap-ssh` firewall rule was added manually for log export, delete it before cleanup so it does not prevent network removal.
-
-Stopped Cloud SQL storage and IP resources, as well as retained bucket contents, can still incur charges; stopping the deployment does not guarantee a zero bill.
