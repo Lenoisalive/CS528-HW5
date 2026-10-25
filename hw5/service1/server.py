@@ -7,11 +7,20 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from uuid import uuid4
 
-from flask import Flask, request
+from flask import Flask, g, request
+from werkzeug.exceptions import HTTPException
 from google.api_core.exceptions import NotFound
 from google.cloud import pubsub_v1, storage
 
+if __package__:
+    from .database import record_request
+    from .timing import ENV_KEY, TimingMiddleware
+else:
+    from database import record_request
+    from timing import ENV_KEY, TimingMiddleware
+
 app = Flask(__name__)
+app.wsgi_app = TimingMiddleware(app.wsgi_app)
 
 BUCKET_NAME = os.environ.get("BUCKET_NAME", "cs528hw2")
 OBJECT_PREFIX = os.environ.get("OBJECT_PREFIX", "pages").strip("/")
@@ -88,6 +97,121 @@ def log_http_error(request, event, status, message, *, severity="ERROR", **detai
             }), flush=True)
 
 
+def extract_request_metadata():
+    """Extract the supplied client's headers; retain demographic group labels."""
+    def header(field, default):
+        value = request.headers.get(os.environ.get(f"REQUEST_HEADER_{field}", default))
+        return value.strip() if value and value.strip() else None
+
+    country = header("COUNTRY", "X-country")
+    country = COUNTRY_LOOKUP.get((country or "").casefold(), country)
+    filename = request.path.lstrip("/") or None
+    if request.method == "POST":
+        payload = request.get_json(silent=True)
+        filename = payload.get("filename") if isinstance(payload, dict) else None
+        if not isinstance(filename, str):
+            filename = None
+    return {
+        "id": g.request_id,
+        "country": country,
+        "client_ip": header("CLIENT_IP", "X-client-ip") or request.remote_addr,
+        "gender": header("GENDER", "X-gender"),
+        "age": header("AGE", "X-age"),
+        "income": header("INCOME", "X-income"),
+        "client_time": header("TIME", "X-time"),
+        "is_banned": country in FORBIDDEN_COUNTRIES,
+        "requested_at": g.requested_at,
+        "requested_file": filename,
+        "experiment_id": os.environ.get("EXPERIMENT_ID", "manual"),
+    }
+
+
+def parse_request():
+    """Extract metadata once and validate the filename without cloud I/O."""
+    g.request_record = extract_request_metadata()
+    g.filename_error = None
+    filename = g.request_record["requested_file"]
+    # Preserve the existing banned-country and unsupported-method precedence.
+    if g.request_record["is_banned"] or request.method not in {"GET", "POST"}:
+        return
+    if request.method == "POST" and not isinstance(request.get_json(silent=True), dict):
+        g.filename_error = "Provide a JSON object containing filename."
+    elif not isinstance(filename, str) or not filename.strip():
+        g.filename_error = "filename must be a non-empty string."
+    elif any(part in ("", ".", "..") for part in filename.split("/")):
+        g.filename_error = "filename must be a relative file path."
+
+
+@app.before_request
+def capture_request():
+    g.request_id = str(uuid4())
+    g.requested_at = datetime.now(timezone.utc)
+    # Retain a minimal record even if header/body extraction raises unexpectedly.
+    g.request_record = {
+        "id": g.request_id, "requested_at": g.requested_at,
+        "requested_file": request.path.lstrip("/") or None,
+        "is_banned": False,
+        "experiment_id": os.environ.get("EXPERIMENT_ID", "manual"),
+    }
+    timing = request.environ[ENV_KEY]
+    timing.record.update(request_id=g.request_id,
+                         experiment_id=g.request_record["experiment_id"])
+    with timing.measure("request_parse"):
+        parse_request()
+    timing.record["validation_error"] = g.filename_error
+
+
+def write_request_record(record):
+    """Include pool acquisition, inserts, commit and connection return."""
+    with request.environ[ENV_KEY].measure("database_write"):
+        record_request(record)
+
+
+def download_file(blob):
+    """Measure the actual GCS download, including SDK retries and failures."""
+    with request.environ[ENV_KEY].measure("gcs_read"):
+        return blob.download_as_bytes()
+
+
+@app.after_request
+def persist_request(response):
+    # All normal returns, framework errors and handled exceptions reach here.
+    # Mark before attempting I/O, so Flask finalization cannot retry a commit.
+    if getattr(g, "recording_attempted", False):
+        return response
+    g.recording_attempted = True
+    record = {**g.request_record, "status_code": response.status_code}
+    try:
+        write_request_record(record)
+    except Exception as exc:
+        # A lost commit acknowledgement can leave the result unknown. Keep the
+        # same ID in the fallback log for reconciliation; do not retry blindly.
+        print(json.dumps({
+            "severity": "CRITICAL", "event": "request_database_write_failed",
+            "message": "Request persistence failed; transaction outcome may be unknown.",
+            "error_type": type(exc).__name__,
+            "record": {**record, "requested_at": record["requested_at"].isoformat()},
+            "response_status": 503,
+        }), flush=True)
+        response = app.make_response(({
+            "error": "Request logging unavailable.", "request_id": record["id"],
+        }, 503))
+    response.headers["X-Request-ID"] = record["id"]
+    return response
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(exc):
+    if isinstance(exc, HTTPException):
+        return exc
+    print(json.dumps({
+        "severity": "ERROR", "event": "unhandled_request_exception",
+        "request_id": getattr(g, "request_id", None),
+        "error_type": type(exc).__name__,
+    }), flush=True)
+    return {"error": "Internal server error."}, 500
+
+
 @app.before_request
 def reject_unsupported_methods():
     # Run before routing, including Flask's automatic HEAD/OPTIONS handling.
@@ -104,14 +228,10 @@ def reject_unsupported_methods():
            provide_automatic_options=False)
 def serve_file(filename_path=None):
     # Check before payload validation or any GCS access.
-    country = COUNTRY_LOOKUP.get(request.headers.get("X-country", "").strip().casefold())
+    country = g.request_record["country"] if g.request_record["is_banned"] else None
     if country:
         # Extract only notification metadata; never access GCS for denied requests.
-        if request.method == "POST":
-            payload = request.get_json(silent=True)
-            filename = payload.get("filename") if isinstance(payload, dict) else None
-        else:
-            filename = request.path.lstrip("/")
+        filename = g.request_record["requested_file"]
         if not isinstance(filename, str) or not filename.strip():
             filename = None
         event = {
@@ -156,24 +276,14 @@ def serve_file(filename_path=None):
             }), flush=True)
         return {"error": "Permission denied", "country": country}, 400
 
-    if request.method == "GET":
-        filename = filename_path
-    else:  # POST; all other methods are rejected by before_request.
-        payload = request.get_json(silent=True)
-        if not isinstance(payload, dict):
-            return {"error": "Provide a JSON object containing filename."}, 400
-        filename = payload.get("filename")
-    if not isinstance(filename, str) or not filename.strip():
-        return {"error": "filename must be a non-empty string."}, 400
-
-    # Filenames are relative to OBJECT_PREFIX, e.g. 1.html -> pages/1.html.
-    if any(part in ("", ".", "..") for part in filename.split("/")):
-        return {"error": "filename must be a relative file path."}, 400
+    if g.filename_error:
+        return {"error": g.filename_error}, 400
+    filename = g.request_record["requested_file"]
 
     object_name = f"{OBJECT_PREFIX}/{filename}" if OBJECT_PREFIX else filename
     blob = get_storage_client().bucket(BUCKET_NAME).blob(object_name)
     try:
-        contents = blob.download_as_bytes()
+        contents = download_file(blob)
     except NotFound:
         log_http_error(
             request, "file_not_found", 404,

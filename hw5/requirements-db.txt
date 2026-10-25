@@ -1,0 +1,3 @@
+-r service1/requirements.txt
+SQLAlchemy>=2.0,<3
+cloud-sql-python-connector[pg8000]>=1.12,<2

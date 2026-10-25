@@ -1,0 +1,22 @@
+[Unit]
+Description=Unmodified HW4 Pub/Sub subscriber for HW5
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=hw5
+Group=hw5
+WorkingDirectory=/opt/hw5
+EnvironmentFile=/etc/hw5.env
+ExecStart=/opt/hw5/.venv/bin/python /opt/hw5/service2/subscriber.py
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=90
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

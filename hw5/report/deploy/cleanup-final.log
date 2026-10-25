@@ -1,0 +1,56 @@
+Deleted job [hw5-hourly-stop-sql].
+Setting SQL activation policy to NEVER; waiting for the cloud operation...
+The following message will be used for the patch API method.
+{"name": "hw5-postgres", "project": "cs-528-508021", "settings": {"activationPolicy": "NEVER"}}
+Patching Cloud SQL instance...
+......done.
+Updated [https://sqladmin.googleapis.com/sql/v1beta4/projects/cs-528-508021/instances/hw5-postgres].
+Deleted [https://www.googleapis.com/compute/v1/projects/cs-528-508021/zones/us-central1-f/instances/hw5-app].
+Deleted [https://www.googleapis.com/compute/v1/projects/cs-528-508021/regions/us-central1/addresses/hw5-web-ip].
+Removing objects:
+  
+Removing gs://gcf-v2-sources-967246303489-us-central1/hw5-stop-sql/function-source.zip#1792870953851933...
+Removing gs://gcf-v2-sources-967246303489-us-central1/hw5-stop-sql/function-source.zip#1792873606882630...
+.
+Preparing function...
+done.
+Deleting function...
+[Service].......................................done
+[Artifact Registry]done
+Done.
+Deleted [projects/cs-528-508021/locations/us-central1/functions/hw5-stop-sql].
+Listing items under project cs-528-508021, location us-central1.
+
+Encryption: Google-managed key
+Repository Size: 14.871MB
+Delete request issued for: [hw5-functions]
+Waiting for operation [projects/cs-528-508021/locations/us-central1/operations/b9f37de1-9514-449b-93a6-5e0ff01aa87e] to complete...
+......done.
+Deleted repository [hw5-functions].
+Deleted subscription [projects/cs-528-508021/subscriptions/hw5-forbidden-sub].
+Deleted topic [projects/cs-528-508021/topics/hw5-forbidden-requests].
+Deleted [https://www.googleapis.com/compute/v1/projects/cs-528-508021/global/firewalls/hw5-web-http].
+Deleted [https://www.googleapis.com/compute/v1/projects/cs-528-508021/regions/us-central1/subnetworks/hw5-subnet].
+Deleted [https://www.googleapis.com/compute/v1/projects/cs-528-508021/global/networks/hw5-network].
+Removing objects:
+  
+Removing gs://cs-528-508021-hw5-deploy/app-1e21897a86efd495aa881ff569a5d935136e999356457fc1470134f4779d514f.tar.gz#1792870928722647...
+Removing gs://cs-528-508021-hw5-deploy/app-4493643a8010b96b3bc37ef46aa925ec5f4afc158323e675da4b77f3a6f62435.tar.gz#1792873587396361...
+.Removing gs://cs-528-508021-hw5-deploy/us-central1-hw5-stop-sql-aokurokrvimq.zip#1792873604444232...
+Removing gs://cs-528-508021-hw5-deploy/us-central1-hw5-stop-sql-zeywwxbiykdz.zip#1792870952014807...
+.
+Removing buckets:
+  
+Removing gs://cs-528-508021-hw5-deploy/...
+.
+Deleted secret [hw5-db-password].
+Updated IAM policy for project [cs-528-508021].
+Updated IAM policy for project [cs-528-508021].
+Updated IAM policy for project [cs-528-508021].
+Updated IAM policy for project [cs-528-508021].
+Updated IAM policy for project [cs-528-508021].
+Updated IAM policy for project [cs-528-508021].
+Credentials revoked.
+Cleanup complete: SQL stopped, HW2 bucket/data retained, VM/static IP/function/job and deployment artifacts removed.
+Non-billable service accounts, API enablement and custom role are retained for reuse.
+SQL data/storage, SQL-assigned IP, backups, retained HW2 objects and any retained managed source objects may still be billed.

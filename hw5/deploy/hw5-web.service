@@ -1,0 +1,21 @@
+[Unit]
+Description=HW5 file server with SQL request logging
+Wants=network-online.target
+Requires=hw5-schema.service
+After=network-online.target hw5-schema.service
+
+[Service]
+User=hw5
+Group=hw5
+WorkingDirectory=/opt/hw5
+EnvironmentFile=/etc/hw5.env
+ExecStart=/opt/hw5/.venv/bin/gunicorn --bind 0.0.0.0:8080 --workers 1 --worker-class gthread --threads 8 --timeout 120 --access-logfile - --error-logfile - --capture-output service1.server:app
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

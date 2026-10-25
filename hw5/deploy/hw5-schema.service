@@ -1,0 +1,22 @@
+[Unit]
+Description=Ensure HW5 database schema exists without deleting data
+Wants=network-online.target
+After=network-online.target
+Before=hw5-web.service
+
+[Service]
+Type=oneshot
+User=hw5
+Group=hw5
+WorkingDirectory=/opt/hw5
+EnvironmentFile=/etc/hw5.env
+ExecStart=/opt/hw5/.venv/bin/python /opt/hw5/setup_schema.py
+RemainAfterExit=yes
+TimeoutStartSec=180
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
